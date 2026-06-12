@@ -1,10 +1,10 @@
 import { createClient, createAccount as createGenLayerAccount, generatePrivateKey } from "genlayer-js";
-import { simulator } from "genlayer-js/chains";
+import { localnet } from "genlayer-js/chains";
 
-const accountPrivateKey = localStorage.getItem("accountPrivateKey")
-  ? localStorage.getItem("accountPrivateKey")
-  : null;
-export const account = accountPrivateKey ? createGenLayerAccount(accountPrivateKey) : null;
+const normalizePrivateKey = (key) => (key.startsWith("0x") ? key : `0x${key}`);
+
+const storedKey = localStorage.getItem("accountPrivateKey");
+export const account = storedKey ? createGenLayerAccount(normalizePrivateKey(storedKey)) : null;
 
 export const createAccount = () => {
   const newAccountPrivateKey = generatePrivateKey();
@@ -16,4 +16,4 @@ export const removeAccount = () => {
   localStorage.removeItem("accountPrivateKey");
 };
 
-export const client = createClient({ chain: simulator, account });
+export const client = createClient({ chain: localnet, account });

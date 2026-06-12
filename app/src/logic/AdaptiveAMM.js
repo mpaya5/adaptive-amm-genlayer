@@ -1,88 +1,113 @@
 import { createClient } from "genlayer-js";
-import { simulator } from "genlayer-js/chains";
+import { localnet } from "genlayer-js/chains";
+import { ExecutionResult, TransactionStatus } from "genlayer-js/types";
+
+const READ_OPTS = { stateStatus: "accepted" };
 
 class AdaptiveAMM {
   contractAddress;
   client;
+  account;
 
   constructor(contractAddress, account = null) {
     this.contractAddress = contractAddress;
-    const config = { chain: simulator, ...(account ? { account } : {}) };
-    this.client = createClient(config);
+    this.account = account;
+    this.client = createClient({
+      chain: localnet,
+      ...(account ? { account } : {}),
+    });
   }
 
   updateAccount(account) {
-    this.client = createClient({ chain: simulator, account });
+    this.account = account;
+    this.client = createClient({ chain: localnet, account });
   }
 
-  async get_order_book() {
-    const result = await this.client.readContract({
-        address: this.contractAddress,
-        functionName: "get_order_book",
-        args: []
+  async read(functionName, args = []) {
+    return this.client.readContract({
+      address: this.contractAddress,
+      functionName,
+      args,
+      ...READ_OPTS,
     });
-    return result;
   }
 
-  async get_current_price() {
-    const result = await this.client.readContract({
-        address: this.contractAddress,
-        functionName: "get_current_price",
-        args: []
-    });
-    return result;
-  }
-
-  async get_volume() {
-    const result = await this.client.readContract({
-        address: this.contractAddress,
-        functionName: "get_volume",
-        args: []
-    });
-    return result;
-  }
-
-  async get_open_orders() {
-    const result = await this.client.readContract({
-        address: this.contractAddress,
-        functionName: "get_open_orders",
-        args: []
-    });
-    return result;
-  }
-
-  async get_balance() {
-    const result = await this.client.readContract({
-        address: this.contractAddress,
-        functionName: "get_balance",
-        args: []
-    });
-    return result;
-  }
-
-  async resolve() {
+  async write(functionName, args = []) {
     const txHash = await this.client.writeContract({
-        address: this.contractAddress,
-        functionName: "resolve",
-        args: []
+      account: this.account,
+      address: this.contractAddress,
+      functionName,
+      args,
+      value: 0n,
     });
 
     const receipt = await this.client.waitForTransactionReceipt({
-        hash: txHash,
-        status: "FINALIZED",
-        interval: 10000,
-        retries: 20,
+      hash: txHash,
+      status: TransactionStatus.FINALIZED,
+      interval: 10000,
+      retries: 20,
     });
-    console.log(receipt)
 
-    const result = await this.client.readContract({
-        address: this.contractAddress,
-        functionName: "get_resolve_response",
-        args: []
-    });
-    console.log(result)
-    return result;
+    if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+      throw new Error(`${functionName}() failed: ${receipt.txExecutionResultName ?? "unknown"}`);
+    }
 
+    return receipt;
+  }
+
+  async get_symbol() {
+    return this.read("get_symbol");
+  }
+
+  async get_data_source() {
+    return this.read("get_data_source");
+  }
+
+  async get_order_book() {
+    return this.read("get_order_book");
+  }
+
+  async get_current_price() {
+    return this.read("get_current_price");
+  }
+
+  async get_volume() {
+    return this.read("get_volume");
+  }
+
+  async get_open_orders() {
+    return this.read("get_open_orders");
+  }
+
+  async get_balance() {
+    return this.read("get_balance");
+  }
+
+  async get_resolve_response() {
+    return this.read("get_resolve_response");
+  }
+
+  async refreshMarketData() {
+    await this.write("refresh_market_data");
+  }
+
+  async loadMarketData() {
+    const [symbol, dataSource, currentPrice, volume, orderBook, openOrders, balance] =
+      await Promise.all([
+        this.get_symbol(),
+        this.get_data_source(),
+        this.get_current_price(),
+        this.get_volume(),
+        this.get_order_book(),
+        this.get_open_orders(),
+        this.get_balance(),
+      ]);
+    return { symbol, dataSource, currentPrice, volume, orderBook, openOrders, balance };
+  }
+
+  async resolve() {
+    await this.write("resolve");
+    return this.get_resolve_response();
   }
 }
 

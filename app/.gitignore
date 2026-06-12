@@ -1,3 +1,9 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.bak
+
 # Logs
 logs
 *.log
@@ -7,10 +13,14 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies & build
 node_modules
 dist
 dist-ssr
 *.local
+
+# Python (if running scripts from app/)
+__pycache__/
 
 # Editor directories and files
 .vscode/*
