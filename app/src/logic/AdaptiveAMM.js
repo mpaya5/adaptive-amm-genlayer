@@ -1,17 +1,24 @@
 import { createClient } from "genlayer-js";
 import { localnet } from "genlayer-js/chains";
 import { ExecutionResult, TransactionStatus } from "genlayer-js/types";
+import {
+  fetchBinanceMarket,
+  getDemoMarketSnapshot,
+} from "./demoMarketData.js";
 
 const READ_OPTS = { stateStatus: "accepted" };
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 class AdaptiveAMM {
   contractAddress;
   client;
   account;
+  demoState;
 
   constructor(contractAddress, account = null) {
     this.contractAddress = contractAddress;
     this.account = account;
+    this.demoState = getDemoMarketSnapshot();
     this.client = createClient({
       chain: localnet,
       ...(account ? { account } : {}),
@@ -24,6 +31,26 @@ class AdaptiveAMM {
   }
 
   async read(functionName, args = []) {
+    if (DEMO_MODE) {
+      const map = {
+        get_symbol: () => this.demoState.symbol,
+        get_data_source: () => this.demoState.dataSource,
+        get_current_price: () => this.demoState.currentPrice,
+        get_volume: () => this.demoState.volume,
+        get_order_book: () => this.demoState.orderBook,
+        get_open_orders: () => this.demoState.openOrders,
+        get_balance: () => this.demoState.balance,
+        get_resolve_response: () => ({
+          cancel_orders: [],
+          new_orders: [],
+          reason_decision:
+            "Demo mode: connect a deployed contract to run live resolve().",
+        }),
+      };
+      if (map[functionName]) return map[functionName]();
+      throw new Error(`Unknown read method: ${functionName}`);
+    }
+
     return this.client.readContract({
       address: this.contractAddress,
       functionName,
@@ -33,6 +60,21 @@ class AdaptiveAMM {
   }
 
   async write(functionName, args = []) {
+    if (DEMO_MODE) {
+      if (functionName === "refresh_market_data") {
+        const live = await fetchBinanceMarket("SUIUSDT");
+        this.demoState = { ...this.demoState, ...live };
+        return { txExecutionResultName: ExecutionResult.FINISHED_WITH_RETURN };
+      }
+      if (functionName === "resolve") {
+        await this.write("refresh_market_data");
+        this.demoState.reasonDecision =
+          "Demo mode preview — deploy the contract for on-chain LLM resolve.";
+        return { txExecutionResultName: ExecutionResult.FINISHED_WITH_RETURN };
+      }
+      return { txExecutionResultName: ExecutionResult.FINISHED_WITH_RETURN };
+    }
+
     const txHash = await this.client.writeContract({
       account: this.account,
       address: this.contractAddress,

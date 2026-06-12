@@ -1,5 +1,6 @@
 .PHONY: help setup dev studio-init studio-up studio-down studio-check \
-        test test-deploy test-integration test-all frontend-dev frontend-build
+        test test-deploy test-integration test-all frontend-dev frontend-demo \
+        frontend-build screenshot
 
 help:
 	@echo "Adaptive AMM — common commands"
@@ -13,7 +14,9 @@ help:
 	@echo "  make test           Ollama validator smoke test"
 	@echo "  make test-deploy    Deploy contract + demo state"
 	@echo "  make test-integration  Live Binance + LLM resolve tests"
-	@echo "  make frontend-dev   Vue dev server"
+	@echo "  make frontend-dev   Vue dev server (needs deployed contract)"
+	@echo "  make frontend-demo  Vue dev server with demo data (no deploy)"
+	@echo "  make screenshot     Capture docs/assets/basic-amm-dashboard.png"
 	@echo "  make frontend-build Production build"
 
 setup:
@@ -52,6 +55,12 @@ test-all:
 
 frontend-dev:
 	cd app && npm run dev
+
+frontend-demo:
+	cd app && VITE_DEMO_MODE=true npm run dev
+
+screenshot:
+	./scripts/capture-dashboard-screenshot.sh
 
 frontend-build:
 	cd app && npm run build
