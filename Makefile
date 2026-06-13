@@ -39,11 +39,11 @@ studio-check:
 
 test:
 	@./scripts/studio-check.sh
-	. venv/bin/activate && pytest test/test_adaptative_amm.py::test_ollama_validators_can_be_created -v
+	. venv/bin/activate && pytest test/test_adaptive_amm.py::test_ollama_validators_can_be_created -v
 
 test-deploy:
 	@./scripts/studio-check.sh
-	. venv/bin/activate && pytest test/test_adaptative_amm.py::test_deploy_and_demo_state -v
+	. venv/bin/activate && pytest test/test_adaptive_amm.py::test_deploy_and_demo_state -v
 
 test-integration:
 	@./scripts/studio-check.sh

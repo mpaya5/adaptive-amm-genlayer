@@ -67,7 +67,7 @@ def deployed_contract(validator_llm_config):
     ).json()
     assert has_success_status(result)
 
-    contract_code = open("contracts/amm_adaptative.py", "r").read()
+    contract_code = open("contracts/amm_adaptive.py", "r").read()
     assert contract_code.startswith('# { "Depends": "py-genlayer:')
     assert "gl.nondet.web.get" in contract_code
 

@@ -6,7 +6,27 @@
 [![Tests](https://img.shields.io/badge/Tests-pytest-0A9D58)](test/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> Production-quality **GenLayer DeFi prototype**: live order-book ingestion, LLM market-making with validator consensus, on-chain state, and a Vue.js dashboard.
+> Portfolio-quality **GenLayer DeFi prototype**: live order-book ingestion, LLM market-making with validator consensus, on-chain state, and a Vue.js dashboard.
+
+<p align="center">
+  <img src="docs/assets/basic-amm-dashboard.png" alt="Adaptive AMM Dashboard — live Binance order book, demo portfolio, and resolve flow" width="100%"/>
+</p>
+
+---
+
+## Why GenLayer is useful here
+
+Traditional AMM bots run off-chain: a single server fetches prices, calls an LLM, and posts orders — with no on-chain audit trail and no way for independent nodes to verify the decision.
+
+GenLayer fits this use case because it lets you keep **non-deterministic steps on-chain** while still reaching agreement:
+
+| Step | GenLayer primitive | Why it matters |
+|------|-------------------|----------------|
+| Fetch live market data | `gl.nondet.web.get` + `run_nondet_unsafe` | Validators independently pull Binance data and agree within a price tolerance |
+| Decide what to trade | `gl.nondet.exec_prompt` + `run_nondet_unsafe` | LLM output is compared across validators before any order change is applied |
+| Persist state | `gl.Contract`, `DynArray[Order]` | Open orders, balances, and reasoning live on-chain — readable by any dApp |
+
+This repo shows that pattern end-to-end: **live external data → validator consensus → LLM strategy → on-chain portfolio update**, all wired to a Vue dashboard via `genlayer-js`.
 
 ---
 
@@ -54,9 +74,7 @@ An earlier **Advanced** mode used CCXT + a separate simulated contract and Vue s
 
 ---
 
-## Dashboard preview
-
-![Basic AMM Dashboard](docs/assets/basic-amm-dashboard.png)
+## Dashboard — UI mapping
 
 | UI element | Contract source |
 |------------|-----------------|
@@ -77,7 +95,7 @@ flowchart TB
         UI --> SDK
     end
 
-    subgraph Contract["contracts/amm_adaptative.py"]
+    subgraph Contract["contracts/amm_adaptive.py"]
         Web["gl.nondet.web.get<br/>Binance API"]
         EP1["run_nondet_unsafe<br/>market data consensus"]
         LLM["gl.nondet.exec_prompt<br/>market-making JSON"]
@@ -193,7 +211,7 @@ make setup                    # venv + pip + .env + npm install
 source venv/bin/activate      # required for pytest / eth-account
 
 # Contract lives at:
-#   contracts/amm_adaptative.py
+#   contracts/amm_adaptive.py
 ```
 
 ### GenLayer Studio (Docker via CLI)
@@ -233,7 +251,7 @@ export GENLAYER_VALIDATOR_MODEL=llama3
 ### Deploy contract
 
 1. Open http://localhost:8080
-2. Paste `contracts/amm_adaptative.py`
+2. Paste `contracts/amm_adaptive.py`
 3. Deploy with constructor args:
 
 ```json
@@ -251,6 +269,13 @@ npm run build                 # or: make frontend-build
 
 On load, the dashboard calls `refresh_market_data()` to populate the live order book.
 
+Preview without a deployed contract:
+
+```bash
+make frontend-demo            # VITE_DEMO_MODE=true — demo portfolio + live Binance in browser
+make screenshot               # capture docs/assets/basic-amm-dashboard.png
+```
+
 ### Makefile summary
 
 | Task | Command |
@@ -266,6 +291,8 @@ On load, the dashboard calls `refresh_market_data()` to populate the live order 
 | Deploy test | `make test-deploy` |
 | Integration tests | `make test-integration` |
 | Frontend dev | `make frontend-dev` |
+| Frontend demo | `make frontend-demo` |
+| Screenshot | `make screenshot` |
 
 ---
 
@@ -300,16 +327,37 @@ On load, the dashboard calls `refresh_market_data()` to populate the live order 
 
 ---
 
-## Security / Limitations
+## What I would improve for production
 
-> **Demo only — not production — no real funds.**
+This repo is a **portfolio prototype**, not a production system. A real deployment would need:
 
-- Demo portfolio balances and open orders are **simulated**, not real exchange positions
-- Live order book is **read-only** public market data (Binance)
-- LLM output is **non-deterministic**; agreement via Equivalence Principle
-- Requires GenLayer Studio with outbound access to Binance
-- Never commit `.env` files (see `.gitignore`)
-- Rotate any API key that was ever committed to git history
+| Area | Improvement |
+|------|-------------|
+| **Risk controls** | Circuit breakers on price deviation, max daily loss, kill switch, and position limits enforced in contract logic — not only in the LLM prompt |
+| **Validator agreement** | Stricter equivalence checks (full order diff, not just cancel count); configurable tolerance per asset; fallback when consensus fails |
+| **Exchange integration** | Signed order placement via CEX APIs or on-chain DEX routers; this demo only simulates portfolio state |
+| **LLM reliability** | Schema validation, retry with temperature 0, model pinning, and human-in-the-loop for large order changes |
+| **Observability** | Structured on-chain events, metrics for resolve latency, and alerting on failed consensus rounds |
+| **Security** | Access control on `resolve()`, rate limiting, input sanitization on web responses, and secrets management outside `.env` |
+| **Testing** | Property-based tests for order constraints, chaos tests for validator disagreement, and CI against a pinned GenLayer version |
+| **Frontend** | Wallet connect, transaction status UX, error boundaries, and no demo mode in production builds |
+
+---
+
+## Security / Demo limitations
+
+> **Portfolio demo only — not production — no real funds.**
+
+| Limitation | Detail |
+|------------|--------|
+| **Simulated portfolio** | Balances and open orders are on-chain demo values, not real exchange positions or custody |
+| **No order execution** | The contract updates simulated state; it does not place trades on Binance or any venue |
+| **Read-only market data** | Live order book comes from Binance public APIs; rate limits and outages affect `refresh_market_data()` |
+| **Non-deterministic LLM** | Strategy output varies per run; agreement relies on Equivalence Principle heuristics, not deterministic rules |
+| **Localnet only** | Tested against GenLayer Studio (`localnet`); mainnet deployment would require separate security review |
+| **Outbound network** | Validators need access to Binance and (for LLM) Ollama; blocked egress breaks consensus |
+| **Secrets hygiene** | Never commit `.env` files (see `.gitignore`); rotate any key ever committed to git history |
+| **Demo mode** | `VITE_DEMO_MODE=true` bypasses the contract for UI preview — disable before any real deployment |
 
 ---
 
@@ -317,7 +365,7 @@ On load, the dashboard calls `refresh_market_data()` to populate the live order 
 
 ```
 adaptive-amm-genlayer/
-├── contracts/amm_adaptative.py   # Intelligent Contract
+├── contracts/amm_adaptive.py     # Intelligent Contract
 ├── app/                          # Vue 3 dashboard
 ├── test/                         # pytest + Studio integration
 ├── tools/                        # RPC helpers, accounts, transactions
